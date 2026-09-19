@@ -20,36 +20,41 @@ app = FastAPI(
 )
 
 
-# ---------------------------------------------------------
+# =========================================================
 # ROUTERS
-# ---------------------------------------------------------
+# =========================================================
 
 app.include_router(adaptive_router)
 
 
-# ---------------------------------------------------------
+# =========================================================
 # CORS
-# ---------------------------------------------------------
+# =========================================================
 
 app.add_middleware(
     CORSMiddleware,
+
     allow_origins=[
         # Local development
         "http://localhost:5173",
         "http://127.0.0.1:5173",
 
-        # Production Vercel frontend
-        "https://astraguard-q62pfczgi-quaser.vercel.app",
+        # Main production Vercel domain
+        "https://astraguard-eight.vercel.app",
     ],
+
+    # Allow AstraGuard preview / branch Vercel deployments
+    allow_origin_regex=r"https://astraguard(?:-[a-zA-Z0-9-]+)*\.vercel\.app",
+
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
-# ---------------------------------------------------------
-# ROOT / HEALTH
-# ---------------------------------------------------------
+# =========================================================
+# ROOT
+# =========================================================
 
 @app.get("/")
 def root() -> dict:
@@ -57,8 +62,15 @@ def root() -> dict:
         "name": "AstraGuard API",
         "status": "online",
         "phase": "autonomous-ml",
+        "production_frontend": (
+            "https://astraguard-eight.vercel.app"
+        ),
     }
 
+
+# =========================================================
+# HEALTH
+# =========================================================
 
 @app.get("/api/health")
 def health_check() -> dict:
@@ -66,13 +78,15 @@ def health_check() -> dict:
         "status": "ok",
         "service": "astraguard-backend",
         "phase": "autonomous-ml",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(
+            timezone.utc
+        ).isoformat(),
     }
 
 
-# ---------------------------------------------------------
+# =========================================================
 # DIAGNOSTICS
-# ---------------------------------------------------------
+# =========================================================
 
 @app.get("/api/diagnostics")
 def diagnostics() -> dict:
@@ -82,25 +96,33 @@ def diagnostics() -> dict:
 
     return {
         "status": "ready",
+
         "phase": "autonomous-ml",
 
         "frontend_expected_origins": [
             "http://localhost:5173",
             "http://127.0.0.1:5173",
-            "https://astraguard-q62pfczgi-quaser.vercel.app",
+            "https://astraguard-eight.vercel.app",
         ],
 
         "backend": "FastAPI",
+
         "polling_interval_seconds": 1,
 
-        "services": snapshot["system"]["services_total"],
-        "scenario_count": len(SCENARIOS),
+        "services":
+            snapshot["system"]["services_total"],
 
-        "core_flow_ready": True,
+        "scenario_count":
+            len(SCENARIOS),
 
-        "persistence": "SQLite",
+        "core_flow_ready":
+            True,
 
-        "incident_memory": "Jaccard similarity",
+        "persistence":
+            "SQLite",
+
+        "incident_memory":
+            "Jaccard similarity",
 
         "reasoning_debate":
             "Deterministic structured evidence debate",
@@ -113,7 +135,9 @@ def diagnostics() -> dict:
                 "Half-Space Trees",
 
             "incident_classifier":
-                runtime_status["model"]["incident_classifier"],
+                runtime_status["model"][
+                    "incident_classifier"
+                ],
 
             "drift_detector":
                 "ADWIN",
@@ -143,59 +167,93 @@ def diagnostics() -> dict:
             notifier.config(),
 
         "persistent_incidents":
-            len(list_incidents(limit=100)),
+            len(
+                list_incidents(
+                    limit=100
+                )
+            ),
 
         "timestamp":
-            datetime.now(timezone.utc).isoformat(),
+            datetime.now(
+                timezone.utc
+            ).isoformat(),
     }
 
 
-# ---------------------------------------------------------
-# SYSTEM SNAPSHOT
-# ---------------------------------------------------------
+# =========================================================
+# SNAPSHOT
+# =========================================================
 
 @app.get("/api/snapshot")
 def get_snapshot() -> dict:
     return simulator.snapshot()
 
 
+# =========================================================
+# SYSTEM
+# =========================================================
+
 @app.get("/api/system")
 def system_status() -> dict:
     return simulator.snapshot()["system"]
 
+
+# =========================================================
+# SERVICES
+# =========================================================
 
 @app.get("/api/services")
 def services() -> list[dict]:
     return simulator.snapshot()["services"]
 
 
+# =========================================================
+# METRICS
+# =========================================================
+
 @app.get("/api/metrics")
 def metrics() -> dict:
     return simulator.snapshot()["metrics"]
 
+
+# =========================================================
+# ALERTS
+# =========================================================
 
 @app.get("/api/alerts")
 def alerts() -> list[dict]:
     return simulator.snapshot()["alerts"]
 
 
-# ---------------------------------------------------------
-# INCIDENTS
-# ---------------------------------------------------------
+# =========================================================
+# INCIDENT LIST
+# =========================================================
 
 @app.get("/api/incidents")
 def incidents() -> list[dict]:
-    incident = simulator.snapshot().get("incident")
+    incident = simulator.snapshot().get(
+        "incident"
+    )
 
-    return [incident] if incident else []
+    return (
+        [incident]
+        if incident
+        else []
+    )
 
+
+# =========================================================
+# INCIDENT DETAIL
+# =========================================================
 
 @app.get("/api/incidents/{incident_id}")
 def incident_detail(
     incident_id: str,
 ) -> dict:
 
-    incident = simulator.snapshot().get("incident")
+    incident = simulator.snapshot().get(
+        "incident"
+    )
 
     if (
         not incident
@@ -209,16 +267,20 @@ def incident_detail(
     return incident
 
 
-# ---------------------------------------------------------
-# ROOT CAUSE ANALYSIS
-# ---------------------------------------------------------
+# =========================================================
+# RCA
+# =========================================================
 
-@app.post("/api/incidents/{incident_id}/analyze")
+@app.post(
+    "/api/incidents/{incident_id}/analyze"
+)
 def analyze_incident(
     incident_id: str,
 ) -> dict:
 
-    incident = simulator.snapshot().get("incident")
+    incident = simulator.snapshot().get(
+        "incident"
+    )
 
     if (
         not incident
@@ -232,9 +294,9 @@ def analyze_incident(
     return incident["rca"]
 
 
-# ---------------------------------------------------------
-# COUNTERFACTUAL
-# ---------------------------------------------------------
+# =========================================================
+# COUNTERFACTUAL ANALYSIS
+# =========================================================
 
 @app.post(
     "/api/incidents/{incident_id}/counterfactual"
@@ -256,11 +318,15 @@ def counterfactual_test(
             detail=str(exc),
         ) from exc
 
-    incident = snapshot.get("incident")
+    incident = snapshot.get(
+        "incident"
+    )
 
     if (
         not incident
-        or not incident.get("counterfactual")
+        or not incident.get(
+            "counterfactual"
+        )
     ):
         raise HTTPException(
             status_code=409,
@@ -273,9 +339,9 @@ def counterfactual_test(
     return incident["counterfactual"]
 
 
-# ---------------------------------------------------------
+# =========================================================
 # REASONING DEBATE
-# ---------------------------------------------------------
+# =========================================================
 
 @app.get(
     "/api/incidents/{incident_id}/debate"
@@ -284,7 +350,9 @@ def incident_debate(
     incident_id: str,
 ) -> dict:
 
-    incident = simulator.snapshot().get("incident")
+    incident = simulator.snapshot().get(
+        "incident"
+    )
 
     if (
         not incident
@@ -303,16 +371,17 @@ def incident_debate(
         raise HTTPException(
             status_code=409,
             detail=(
-                "Reasoning debate is not ready"
+                "Reasoning debate "
+                "is not ready"
             ),
         )
 
     return debate
 
 
-# ---------------------------------------------------------
+# =========================================================
 # BUSINESS IMPACT
-# ---------------------------------------------------------
+# =========================================================
 
 @app.get(
     "/api/incidents/{incident_id}/impact"
@@ -321,7 +390,9 @@ def incident_impact(
     incident_id: str,
 ) -> dict:
 
-    incident = simulator.snapshot().get("incident")
+    incident = simulator.snapshot().get(
+        "incident"
+    )
 
     if (
         not incident
@@ -340,16 +411,17 @@ def incident_impact(
         raise HTTPException(
             status_code=409,
             detail=(
-                "Business impact is not ready"
+                "Business impact "
+                "is not ready"
             ),
         )
 
     return impact
 
 
-# ---------------------------------------------------------
+# =========================================================
 # REMEDIATION
-# ---------------------------------------------------------
+# =========================================================
 
 @app.get(
     "/api/incidents/{incident_id}/remediation"
@@ -358,7 +430,9 @@ def incident_remediation(
     incident_id: str,
 ) -> dict:
 
-    incident = simulator.snapshot().get("incident")
+    incident = simulator.snapshot().get(
+        "incident"
+    )
 
     if (
         not incident
@@ -385,9 +459,9 @@ def incident_remediation(
     return remediation
 
 
-# ---------------------------------------------------------
-# APPROVAL
-# ---------------------------------------------------------
+# =========================================================
+# APPROVE REMEDIATION
+# =========================================================
 
 @app.post(
     "/api/incidents/{incident_id}/approve"
@@ -397,8 +471,10 @@ def approve_remediation(
 ) -> dict:
 
     try:
-        return simulator.approve_remediation(
-            incident_id
+        return (
+            simulator.approve_remediation(
+                incident_id
+            )
         )
 
     except ValueError as exc:
@@ -407,6 +483,10 @@ def approve_remediation(
             detail=str(exc),
         ) from exc
 
+
+# =========================================================
+# REJECT REMEDIATION
+# =========================================================
 
 @app.post(
     "/api/incidents/{incident_id}/reject"
@@ -416,8 +496,10 @@ def reject_remediation(
 ) -> dict:
 
     try:
-        return simulator.reject_remediation(
-            incident_id
+        return (
+            simulator.reject_remediation(
+                incident_id
+            )
         )
 
     except ValueError as exc:
@@ -427,9 +509,9 @@ def reject_remediation(
         ) from exc
 
 
-# ---------------------------------------------------------
-# RECOVERY VERIFICATION
-# ---------------------------------------------------------
+# =========================================================
+# VERIFY RECOVERY
+# =========================================================
 
 @app.post(
     "/api/incidents/{incident_id}/verify"
@@ -450,9 +532,9 @@ def verify_recovery(
         ) from exc
 
 
-# ---------------------------------------------------------
+# =========================================================
 # ROLLBACK
-# ---------------------------------------------------------
+# =========================================================
 
 @app.post(
     "/api/incidents/{incident_id}/rollback"
@@ -473,9 +555,9 @@ def rollback_incident(
         ) from exc
 
 
-# ---------------------------------------------------------
-# DEMO FAILURE CONTROL
-# ---------------------------------------------------------
+# =========================================================
+# FORCE REMEDIATION FAILURE
+# =========================================================
 
 @app.post(
     "/api/system/force-remediation-failure/{enabled}"
@@ -484,14 +566,16 @@ def force_remediation_failure(
     enabled: bool,
 ) -> dict:
 
-    return simulator.set_force_failure(
-        enabled
+    return (
+        simulator.set_force_failure(
+            enabled
+        )
     )
 
 
-# ---------------------------------------------------------
+# =========================================================
 # SCENARIOS
-# ---------------------------------------------------------
+# =========================================================
 
 @app.get("/api/scenarios")
 def scenarios() -> list[dict]:
@@ -505,7 +589,9 @@ def scenarios() -> list[dict]:
                 value["label"],
 
             "summary":
-                value.get("summary"),
+                value.get(
+                    "summary"
+                ),
 
             "expected_root_cause":
                 value.get(
@@ -518,9 +604,9 @@ def scenarios() -> list[dict]:
     ]
 
 
-# ---------------------------------------------------------
-# INJECT INCIDENT
-# ---------------------------------------------------------
+# =========================================================
+# INCIDENT INJECTION
+# =========================================================
 
 @app.post(
     "/api/incidents/inject/{scenario}"
@@ -541,9 +627,9 @@ def inject_incident(
         ) from exc
 
 
-# ---------------------------------------------------------
-# HISTORY
-# ---------------------------------------------------------
+# =========================================================
+# INCIDENT HISTORY
+# =========================================================
 
 @app.get("/api/history")
 def incident_history() -> list[dict]:
@@ -552,6 +638,10 @@ def incident_history() -> list[dict]:
         limit=50
     )
 
+
+# =========================================================
+# AUDIT HISTORY
+# =========================================================
 
 @app.get(
     "/api/history/{incident_id}/audit"
@@ -566,9 +656,9 @@ def historical_audit(
     )
 
 
-# ---------------------------------------------------------
+# =========================================================
 # NOTIFICATIONS
-# ---------------------------------------------------------
+# =========================================================
 
 @app.get("/api/notifications")
 def notifications() -> dict:
@@ -584,6 +674,10 @@ def notifications() -> dict:
     }
 
 
+# =========================================================
+# NOTIFICATION STATUS
+# =========================================================
+
 @app.get(
     "/api/notifications/status"
 )
@@ -592,9 +686,9 @@ def notification_status() -> dict:
     return notifier.config()
 
 
-# ---------------------------------------------------------
-# RESET DEMO
-# ---------------------------------------------------------
+# =========================================================
+# RESET
+# =========================================================
 
 @app.post("/api/system/reset")
 def reset_system() -> dict:
