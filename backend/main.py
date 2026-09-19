@@ -9,26 +9,55 @@ from adaptive_api import router as adaptive_router
 from adaptive_runtime import runtime
 from notification_service import notifier
 
+
 app = FastAPI(
     title="AstraGuard API",
-    description="Backend API for the AstraGuard autonomous incident resolution simulator.",
+    description=(
+        "Backend API for the AstraGuard autonomous "
+        "incident resolution simulator."
+    ),
     version="1.0.0-autonomous-ml",
 )
 
+
+# ---------------------------------------------------------
+# ROUTERS
+# ---------------------------------------------------------
+
 app.include_router(adaptive_router)
+
+
+# ---------------------------------------------------------
+# CORS
+# ---------------------------------------------------------
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=[
+        # Local development
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+
+        # Production Vercel frontend
+        "https://astraguard-q62pfczgi-quaser.vercel.app",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
+# ---------------------------------------------------------
+# ROOT / HEALTH
+# ---------------------------------------------------------
+
 @app.get("/")
 def root() -> dict:
-    return {"name": "AstraGuard API", "status": "online", "phase": "autonomous-ml"}
+    return {
+        "name": "AstraGuard API",
+        "status": "online",
+        "phase": "autonomous-ml",
+    }
 
 
 @app.get("/api/health")
@@ -41,40 +70,89 @@ def health_check() -> dict:
     }
 
 
+# ---------------------------------------------------------
+# DIAGNOSTICS
+# ---------------------------------------------------------
+
 @app.get("/api/diagnostics")
 def diagnostics() -> dict:
     snapshot = simulator.snapshot()
+
+    runtime_status = runtime.status()
+
     return {
         "status": "ready",
         "phase": "autonomous-ml",
-        "frontend_expected_origin": "http://localhost:5173",
+
+        "frontend_expected_origins": [
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "https://astraguard-q62pfczgi-quaser.vercel.app",
+        ],
+
         "backend": "FastAPI",
         "polling_interval_seconds": 1,
+
         "services": snapshot["system"]["services_total"],
         "scenario_count": len(SCENARIOS),
+
         "core_flow_ready": True,
+
         "persistence": "SQLite",
+
         "incident_memory": "Jaccard similarity",
-        "reasoning_debate": "Deterministic structured evidence debate",
-        "adaptive_learning": runtime.status(),
+
+        "reasoning_debate":
+            "Deterministic structured evidence debate",
+
+        "adaptive_learning":
+            runtime_status,
+
         "streaming_ml": {
-            "anomaly_detector": "Half-Space Trees",
-            "incident_classifier": runtime.status()["model"]["incident_classifier"],
-            "drift_detector": "ADWIN",
-            "verified_feedback_learning": True,
-            "model_persistence": True,
+            "anomaly_detector":
+                "Half-Space Trees",
+
+            "incident_classifier":
+                runtime_status["model"]["incident_classifier"],
+
+            "drift_detector":
+                "ADWIN",
+
+            "verified_feedback_learning":
+                True,
+
+            "model_persistence":
+                True,
         },
-        "demo_hardening": True,
+
+        "demo_hardening":
+            True,
+
         "risk_aware_autonomy": {
-            "low_risk": "AUTO_EXECUTION_PERMITTED",
-            "medium_high_risk": "HUMAN_APPROVAL_REQUIRED",
-            "destructive": "BLOCKED",
+            "low_risk":
+                "AUTO_EXECUTION_PERMITTED",
+
+            "medium_high_risk":
+                "HUMAN_APPROVAL_REQUIRED",
+
+            "destructive":
+                "BLOCKED",
         },
-        "admin_notifications": notifier.config(),
-        "persistent_incidents": len(list_incidents(limit=100)),
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+
+        "admin_notifications":
+            notifier.config(),
+
+        "persistent_incidents":
+            len(list_incidents(limit=100)),
+
+        "timestamp":
+            datetime.now(timezone.utc).isoformat(),
     }
 
+
+# ---------------------------------------------------------
+# SYSTEM SNAPSHOT
+# ---------------------------------------------------------
 
 @app.get("/api/snapshot")
 def get_snapshot() -> dict:
@@ -101,154 +179,424 @@ def alerts() -> list[dict]:
     return simulator.snapshot()["alerts"]
 
 
+# ---------------------------------------------------------
+# INCIDENTS
+# ---------------------------------------------------------
+
 @app.get("/api/incidents")
 def incidents() -> list[dict]:
     incident = simulator.snapshot().get("incident")
+
     return [incident] if incident else []
 
 
 @app.get("/api/incidents/{incident_id}")
-def incident_detail(incident_id: str) -> dict:
+def incident_detail(
+    incident_id: str,
+) -> dict:
+
     incident = simulator.snapshot().get("incident")
-    if not incident or incident["id"] != incident_id:
-        raise HTTPException(status_code=404, detail="Incident not found")
+
+    if (
+        not incident
+        or incident["id"] != incident_id
+    ):
+        raise HTTPException(
+            status_code=404,
+            detail="Incident not found",
+        )
+
     return incident
 
 
+# ---------------------------------------------------------
+# ROOT CAUSE ANALYSIS
+# ---------------------------------------------------------
+
 @app.post("/api/incidents/{incident_id}/analyze")
-def analyze_incident(incident_id: str) -> dict:
+def analyze_incident(
+    incident_id: str,
+) -> dict:
+
     incident = simulator.snapshot().get("incident")
-    if not incident or incident["id"] != incident_id:
-        raise HTTPException(status_code=404, detail="Incident not found")
+
+    if (
+        not incident
+        or incident["id"] != incident_id
+    ):
+        raise HTTPException(
+            status_code=404,
+            detail="Incident not found",
+        )
+
     return incident["rca"]
 
 
-@app.post("/api/incidents/{incident_id}/counterfactual")
-def counterfactual_test(incident_id: str) -> dict:
+# ---------------------------------------------------------
+# COUNTERFACTUAL
+# ---------------------------------------------------------
+
+@app.post(
+    "/api/incidents/{incident_id}/counterfactual"
+)
+def counterfactual_test(
+    incident_id: str,
+) -> dict:
+
     try:
-        snapshot = simulator.run_counterfactual_test(incident_id)
+        snapshot = (
+            simulator.run_counterfactual_test(
+                incident_id
+            )
+        )
+
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        ) from exc
+
     incident = snapshot.get("incident")
-    if not incident or not incident.get("counterfactual"):
-        raise HTTPException(status_code=409, detail="Counterfactual analysis is not ready")
+
+    if (
+        not incident
+        or not incident.get("counterfactual")
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Counterfactual analysis "
+                "is not ready"
+            ),
+        )
+
     return incident["counterfactual"]
 
 
-@app.get("/api/incidents/{incident_id}/debate")
-def incident_debate(incident_id: str) -> dict:
+# ---------------------------------------------------------
+# REASONING DEBATE
+# ---------------------------------------------------------
+
+@app.get(
+    "/api/incidents/{incident_id}/debate"
+)
+def incident_debate(
+    incident_id: str,
+) -> dict:
+
     incident = simulator.snapshot().get("incident")
-    if not incident or incident["id"] != incident_id:
-        raise HTTPException(status_code=404, detail="Incident not found")
-    debate = incident.get("reasoning_debate")
+
+    if (
+        not incident
+        or incident["id"] != incident_id
+    ):
+        raise HTTPException(
+            status_code=404,
+            detail="Incident not found",
+        )
+
+    debate = incident.get(
+        "reasoning_debate"
+    )
+
     if not debate:
-        raise HTTPException(status_code=409, detail="Reasoning debate is not ready")
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Reasoning debate is not ready"
+            ),
+        )
+
     return debate
 
 
-@app.get("/api/incidents/{incident_id}/impact")
-def incident_impact(incident_id: str) -> dict:
+# ---------------------------------------------------------
+# BUSINESS IMPACT
+# ---------------------------------------------------------
+
+@app.get(
+    "/api/incidents/{incident_id}/impact"
+)
+def incident_impact(
+    incident_id: str,
+) -> dict:
+
     incident = simulator.snapshot().get("incident")
-    if not incident or incident["id"] != incident_id:
-        raise HTTPException(status_code=404, detail="Incident not found")
-    impact = incident.get("business_impact")
+
+    if (
+        not incident
+        or incident["id"] != incident_id
+    ):
+        raise HTTPException(
+            status_code=404,
+            detail="Incident not found",
+        )
+
+    impact = incident.get(
+        "business_impact"
+    )
+
     if not impact:
-        raise HTTPException(status_code=409, detail="Business impact is not ready")
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Business impact is not ready"
+            ),
+        )
+
     return impact
 
 
-@app.get("/api/incidents/{incident_id}/remediation")
-def incident_remediation(incident_id: str) -> dict:
+# ---------------------------------------------------------
+# REMEDIATION
+# ---------------------------------------------------------
+
+@app.get(
+    "/api/incidents/{incident_id}/remediation"
+)
+def incident_remediation(
+    incident_id: str,
+) -> dict:
+
     incident = simulator.snapshot().get("incident")
-    if not incident or incident["id"] != incident_id:
-        raise HTTPException(status_code=404, detail="Incident not found")
-    remediation = incident.get("remediation")
+
+    if (
+        not incident
+        or incident["id"] != incident_id
+    ):
+        raise HTTPException(
+            status_code=404,
+            detail="Incident not found",
+        )
+
+    remediation = incident.get(
+        "remediation"
+    )
+
     if not remediation:
-        raise HTTPException(status_code=409, detail="Remediation recommendation is not ready")
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Remediation recommendation "
+                "is not ready"
+            ),
+        )
+
     return remediation
 
 
-@app.post("/api/incidents/{incident_id}/approve")
-def approve_remediation(incident_id: str) -> dict:
+# ---------------------------------------------------------
+# APPROVAL
+# ---------------------------------------------------------
+
+@app.post(
+    "/api/incidents/{incident_id}/approve"
+)
+def approve_remediation(
+    incident_id: str,
+) -> dict:
+
     try:
-        return simulator.approve_remediation(incident_id)
+        return simulator.approve_remediation(
+            incident_id
+        )
+
     except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        ) from exc
 
 
-@app.post("/api/incidents/{incident_id}/reject")
-def reject_remediation(incident_id: str) -> dict:
+@app.post(
+    "/api/incidents/{incident_id}/reject"
+)
+def reject_remediation(
+    incident_id: str,
+) -> dict:
+
     try:
-        return simulator.reject_remediation(incident_id)
+        return simulator.reject_remediation(
+            incident_id
+        )
+
     except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        ) from exc
 
 
-@app.post("/api/incidents/{incident_id}/verify")
-def verify_recovery(incident_id: str) -> dict:
+# ---------------------------------------------------------
+# RECOVERY VERIFICATION
+# ---------------------------------------------------------
+
+@app.post(
+    "/api/incidents/{incident_id}/verify"
+)
+def verify_recovery(
+    incident_id: str,
+) -> dict:
+
     try:
-        return simulator.verify_now(incident_id)
+        return simulator.verify_now(
+            incident_id
+        )
+
     except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        ) from exc
 
 
-@app.post("/api/incidents/{incident_id}/rollback")
-def rollback_incident(incident_id: str) -> dict:
+# ---------------------------------------------------------
+# ROLLBACK
+# ---------------------------------------------------------
+
+@app.post(
+    "/api/incidents/{incident_id}/rollback"
+)
+def rollback_incident(
+    incident_id: str,
+) -> dict:
+
     try:
-        return simulator.rollback(incident_id)
+        return simulator.rollback(
+            incident_id
+        )
+
     except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        ) from exc
 
 
-@app.post("/api/system/force-remediation-failure/{enabled}")
-def force_remediation_failure(enabled: bool) -> dict:
-    return simulator.set_force_failure(enabled)
+# ---------------------------------------------------------
+# DEMO FAILURE CONTROL
+# ---------------------------------------------------------
 
+@app.post(
+    "/api/system/force-remediation-failure/{enabled}"
+)
+def force_remediation_failure(
+    enabled: bool,
+) -> dict:
+
+    return simulator.set_force_failure(
+        enabled
+    )
+
+
+# ---------------------------------------------------------
+# SCENARIOS
+# ---------------------------------------------------------
 
 @app.get("/api/scenarios")
 def scenarios() -> list[dict]:
+
     return [
         {
-            "id": key,
-            "label": value["label"],
-            "summary": value.get("summary"),
-            "expected_root_cause": value.get("expected_root_cause"),
+            "id":
+                key,
+
+            "label":
+                value["label"],
+
+            "summary":
+                value.get("summary"),
+
+            "expected_root_cause":
+                value.get(
+                    "expected_root_cause"
+                ),
         }
-        for key, value in SCENARIOS.items()
+
+        for key, value
+        in SCENARIOS.items()
     ]
 
 
-@app.post("/api/incidents/inject/{scenario}")
-def inject_incident(scenario: str) -> dict:
-    try:
-        return simulator.inject(scenario)
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+# ---------------------------------------------------------
+# INJECT INCIDENT
+# ---------------------------------------------------------
 
+@app.post(
+    "/api/incidents/inject/{scenario}"
+)
+def inject_incident(
+    scenario: str,
+) -> dict:
+
+    try:
+        return simulator.inject(
+            scenario
+        )
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        ) from exc
+
+
+# ---------------------------------------------------------
+# HISTORY
+# ---------------------------------------------------------
 
 @app.get("/api/history")
 def incident_history() -> list[dict]:
-    return list_incidents(limit=50)
+
+    return list_incidents(
+        limit=50
+    )
 
 
-@app.get("/api/history/{incident_id}/audit")
-def historical_audit(incident_id: str) -> list[dict]:
-    return list_audit_events(incident_id=incident_id, limit=250)
+@app.get(
+    "/api/history/{incident_id}/audit"
+)
+def historical_audit(
+    incident_id: str,
+) -> list[dict]:
 
+    return list_audit_events(
+        incident_id=incident_id,
+        limit=250,
+    )
+
+
+# ---------------------------------------------------------
+# NOTIFICATIONS
+# ---------------------------------------------------------
 
 @app.get("/api/notifications")
 def notifications() -> dict:
+
     return {
-        "config": notifier.config(),
-        "events": notifier.history(limit=50),
+        "config":
+            notifier.config(),
+
+        "events":
+            notifier.history(
+                limit=50
+            ),
     }
 
 
-@app.get("/api/notifications/status")
+@app.get(
+    "/api/notifications/status"
+)
 def notification_status() -> dict:
+
     return notifier.config()
 
 
+# ---------------------------------------------------------
+# RESET DEMO
+# ---------------------------------------------------------
+
 @app.post("/api/system/reset")
 def reset_system() -> dict:
+
     return simulator.reset_demo()
