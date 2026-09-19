@@ -5,3 +5,4 @@ sqlalchemy==2.0.43
 networkx==3.5
 python-multipart==0.0.20
 river>=0.22.0,<1.0
+resend
